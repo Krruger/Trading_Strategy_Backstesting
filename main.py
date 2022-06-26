@@ -7,18 +7,25 @@ from urllib.request import urlretrieve
 import plotly.express as px
 import talib as ta
 import plotly.graph_objs as go
-
-
+from pandas_ta import adx, dm, sma
+import numpy as np
 import yfinance as yf
 
 ### init table name###
 companies = [
-    'ALE.WA', 'KGH.WA', 'PKN.WA', 'LTS.WA', 'PGE.WA', 'DNP.WA',
+    'ALE.WA',
+    'KGH.WA',
+    'PKN.WA',
+    'LTS.WA',
+    'PGE.WA',
+    'DNP.WA', 'CPS.WA'
              'JSW.WA',
-             'PZU.WA', 'PKO.WA', "PEO.WA", "CDR.WA"
+             'PZU.WA', 'PKO.WA', "PEO.WA",
+             "CDR.WA", 'MBK.WA'
+# "SI=F",
              ]
 dataName = companies[0] + '.csv'
-days = "50d"
+days = "365d"
 interval = "1h"
 
 if interval == "1h":
@@ -33,6 +40,7 @@ data = data.set_index(data.index.tz_localize(None))
 data.to_csv(f"{dataName}", index=True, encoding="utf-8", index_label="Date")
 df = pd.read_csv(f'{dataName}', header=0, index_col='Date', parse_dates=True, date_parser=dateparse).fillna(0)
 companies_earn = df
+companies_earn["zysk"] = 0
 for company in companies:
     dataName = company + '.csv'
     data = yf.Ticker(company).history(period=days, interval=interval)
@@ -61,9 +69,13 @@ for company in companies:
 
     from supertrend import  supertrend
     #
-    trend = supertrend(df,10,5)
+    trend = supertrend(df,12,6)
     stoploss_Trend = supertrend(df,10,2)
     df = df.join(trend)
+    ADX = adx(df['High'], df['Low'], df['Close'])
+    df = df.join(ADX)
+    SMA = sma(df['Close'], 200)
+    df = df.join(SMA)
     #
     # linear = go.Figure(data=go.Scatter(x=df.index, y=x['supertrend']))
     # linear.update_xaxes(
@@ -149,90 +161,156 @@ for company in companies:
     #
     # fig.show()
 
-
+    k_d_different = 4
     df['long'] = None
     df[f"{company}"] = None
     position = None
-    kapitał = 1000
+    kapitał = 2000
     zysk = 0
-    lewar =1
+    lewar = 1
+    take_profit = 0.05
+    stoploss_margin_call = take_profit
+    adx_value = 30
+    ret = 0
+    tranzakcje_zyskowne = 0
+    tranzakcje_stratne = 0
+    total_return = {}
     for current in range(len(df)):
         previous = current - 1
         #In uptrend
         if df['uptrend'][current] == True and position == None:
-            if df['k'][current] < 25 and df['k'][current] >= df['d'][current]:
+                # and position == None and df["Close"][current] > df['SMA_200'][current]:
+            if df['k'][current] < 40 and df['k'][current] - df['d'][current] >= k_d_different and df['ADX_14'][current] > adx_value:
                 df['long'][current] = True
                 position = df['long'][current]
                 akcje = kapitał/df['Close'][current]
                 long_start_data = data.index[current]
-                print(f"Otwarto pozycje long dnia {df.index[current]}")
+                position_price = df['Close'][current]
+                print(f"{company} Otwarto pozycje long dnia {df.index[current]} po cenie {df['Close'][current]}")
 
 
         #In lowertrend
         if df['uptrend'][current] == False and position == None:
-            if df['k'][current] > 75 and df['k'][current] <= df['d'][current]:
+                # and position == None and df["Close"][current] < df['SMA_200'][current]:
+            if df['k'][current] > 60 and df['k'][current] - df['d'][current] <= -k_d_different and df['ADX_14'][current] > adx_value:
                 df['long'][current] = False
                 position = df['long'][current]
                 akcje = kapitał / df['Close'][current]
                 short_start_data = data.index[current]
-                print(f"Otwarto pozycje short dnia {df.index[current]}")
+                position_price = df['Close'][current]
+                print(f"{company} Otwarto pozycje short dnia {df.index[current]} po cenie {df['Close'][current]}")
 
-        #sell long
+        # #sell long
+        # if position == True:
+        #     if df['k'][current] > 75 and df['k'][current] <= df['d'][current]:
+        #         position = None
+        #         after_sell = (akcje * df['Close'][current])
+        #         zysk_z_transakcji = (after_sell - kapitał) * lewar
+        #         zysk = zysk + zysk_z_transakcji
+        #         print(f"Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
+        #         f"\n Zysk z transakcji {zysk_z_transakcji} ")
+
+        # #sell short
+        # if position == False:
+        #     if df['k'][current] < 25 and df['k'][current] >= df['d'][current]:
+        #         position = None
+        #         after_sell =  (akcje * df['Close'][current])
+        #         if after_sell > 1000:
+        #             zysk_z_transakcji = (after_sell - kapitał) * lewar
+        #             zysk = zysk - zysk_z_transakcji
+        #         else:
+        #             zysk_z_transakcji = abs(after_sell - kapitał) * lewar
+        #             zysk = zysk + zysk_z_transakcji
+        #         print(f"Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
+        #         f"\n Zysk z transakcji {zysk_z_transakcji}")
+
+        #takeprofit long
         if position == True:
-            if df['k'][current] > 75 and df['k'][current] <= df['d'][current]:
+            if df['Close'][current] > (position_price * (1+take_profit)):
                 position = None
                 after_sell = (akcje * df['Close'][current])
                 zysk_z_transakcji = (after_sell - kapitał) * lewar
                 zysk = zysk + zysk_z_transakcji
-                print(f"Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                 f"\n Zysk z transakcji {zysk_z_transakcji}")
-
-        #sell short
+                tranzakcje_zyskowne += 1
+        #takeprofit short
         if position == False:
-            if df['k'][current] < 25 and df['k'][current] >= df['d'][current]:
+            if df['Close'][current] < (position_price * (1-take_profit)):
                 position = None
                 after_sell =  (akcje * df['Close'][current])
-                if after_sell > 1000:
+                if after_sell > kapitał:
                     zysk_z_transakcji = (after_sell - kapitał) * lewar
                     zysk = zysk - zysk_z_transakcji
                 else:
                     zysk_z_transakcji = abs(after_sell - kapitał) * lewar
                     zysk = zysk + zysk_z_transakcji
-                print(f"Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                 f"\n Zysk z transakcji {zysk_z_transakcji}")
+                tranzakcje_zyskowne += 1
 
-        #Long stoploss
-        if position == True and stoploss_Trend['uptrend'][current] == False:
+        # Long stoploss
+        if position == True and df['Close'][current] < position_price * (1- stoploss_margin_call) :
             position = None
             after_sell = (akcje * df['Close'][current])
-            if after_sell > 1000:
+            if after_sell > kapitał:
                 zysk_z_transakcji = (after_sell - kapitał) * lewar
                 zysk = zysk + zysk_z_transakcji
-                print(f"STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                       f"\n Zysk z transakcji {zysk_z_transakcji}")
             else:
                 strata_z_transakcji = (after_sell - kapitał) * lewar
                 zysk = zysk + strata_z_transakcji
-                print(f"STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                       f"\n Strata z transakcji {strata_z_transakcji}")
+            tranzakcje_stratne += 1
         #Short stoploss
-        if position == False and stoploss_Trend['uptrend'][current] == True:
+        if position == False and df['Close'][current] > position_price * (1 + stoploss_margin_call):
             position = None
             after_sell = (akcje * df['Close'][current])
-            if after_sell > 1000:
+            if after_sell > kapitał:
                 strata_z_transakcji = (after_sell - kapitał) * lewar
                 zysk = zysk - strata_z_transakcji
-                print(f"STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                       f"\n Strata z transakcji {-strata_z_transakcji}")
             else:
                 zysk_z_transakcji = abs(after_sell - kapitał) * lewar
                 zysk = zysk + zysk_z_transakcji
-                print(f"STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]}."
+                print(f"{company} STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]} po cenie {df['Close'][current]}."
                       f"\n Zysk z transakcji {zysk_z_transakcji}")
+            tranzakcje_stratne += 1
+
+        # #Long stoploss
+        # if position == True and stoploss_Trend['uptrend'][current] == False:
+        #     position = None
+        #     after_sell = (akcje * df['Close'][current])
+        #     if after_sell > 1000:
+        #         zysk_z_transakcji = (after_sell - kapitał) * lewar
+        #         zysk = zysk + zysk_z_transakcji
+        #         print(f"STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]}."
+        #               f"\n Zysk z transakcji {zysk_z_transakcji}")
+        #     else:
+        #         strata_z_transakcji = (after_sell - kapitał) * lewar
+        #         zysk = zysk + strata_z_transakcji
+        #         print(f"STOPLOSS Pozycja long otwarta dnia {long_start_data} została zamknięta dnia {df.index[current]}."
+        #               f"\n Strata z transakcji {strata_z_transakcji}")
+        # #Short stoploss
+        # if position == False and stoploss_Trend['uptrend'][current] == True:
+        #     position = None
+        #     after_sell = (akcje * df['Close'][current])
+        #     if after_sell > 1000:
+        #         strata_z_transakcji = (after_sell - kapitał) * lewar
+        #         zysk = zysk - strata_z_transakcji
+        #         print(f"STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]}."
+        #               f"\n Strata z transakcji {-strata_z_transakcji}")
+        #     else:
+        #         zysk_z_transakcji = abs(after_sell - kapitał) * lewar
+        #         zysk = zysk + zysk_z_transakcji
+        #         print(f"STOPLOSS Pozycja short otwarta dnia {short_start_data} została zamknięta dnia {df.index[current]}."
+        #               f"\n Zysk z transakcji {zysk_z_transakcji}")
         df[f"{company}"][current] = zysk
-# import pandas_ta as ta
+        companies_earn.loc[companies_earn.index[current], 'zysk'] = companies_earn["zysk"][current].astype(np.float64) + zysk
     companies_earn = companies_earn.join(df[f"{company}"])
-print(zysk)
 
 fig_zysk = go.Figure(data=go.Scatter(
     # x=df.index, y=df['zysk'], name="k"
@@ -241,6 +319,10 @@ for company in companies:
     fig_zysk.add_trace(go.Scatter(
         name=f"{company}",
         mode="lines", x=df.index, y=companies_earn[f'{company}']
+))
+fig_zysk.add_trace(go.Scatter(
+    name="Zysk",
+    mode="lines", x=df.index, y=companies_earn['zysk']
 ))
 fig_zysk.update_xaxes(
     rangeslider_visible=True,
@@ -256,7 +338,5 @@ fig_zysk.update_layout(
     yaxis_title=f'{company} Stock'
 )
 fig_zysk.show()
-
-for company in companies:
-    ret = companies_earn[f'{company}'][len(df)-1]
-print(ret)
+print(f"Zysk ={ret}")
+print(f"Procent zyskownych transakcji = {tranzakcje_zyskowne/(tranzakcje_stratne+tranzakcje_zyskowne)}")

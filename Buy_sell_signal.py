@@ -58,19 +58,34 @@ for company in companies:
     strong_sell = (f"Strong {company} sell signal")
     weak_sell = (f"Weak {company} buy signal")
 
+    # # while False != True:
+    # index = len(df) - 1
+    # signals[company] = ""
+    # if df['uptrend'][index] == True:
+    #     if df['k'][index] < 25 or df['d'][index] < 25:
+    #         signals[company] = {f"{strong_buy}"}
+    #     elif df['k'][index] > 25 and df['k'][index] < 75:
+    #         signals[company] = {f"{weak_buy}"}
+    # elif df['uptrend'][index] == False:
+    #     if df['k'][index] > 75 or df['d'][index] > 75:
+    #         signals[company] = {f"{strong_sell}"}
+    #     elif df['k'][index] > 25 and df['k'][index] < 75:
+    #         signals[company] = {f"{weak_sell}"}
+
     # while False != True:
     index = len(df) - 1
     signals[company] = ""
-    if df['uptrend'][index] == True:
-        if df['k'][index] < 25 or df['d'][index] < 25:
-            signals[company] = {f"{strong_buy}"}
-        elif df['k'][index] > 25 and df['k'][index] < 75:
-            signals[company] = {f"{weak_buy}"}
-    elif df['uptrend'][index] == False:
-        if df['k'][index] > 75 or df['d'][index] > 75:
-            signals[company] = {f"{strong_sell}"}
-        elif df['k'][index] > 25 and df['k'][index] < 75:
-            signals[company] = {f"{weak_sell}"}
+    for index in range(len(df)-1)
+        if df['uptrend'][index] == True:
+            if df['k'][index] < 25 or df['d'][index] < 25:
+                signals[company] = {f"{strong_buy}"}
+            elif df['k'][index] > 25 and df['k'][index] < 75:
+                signals[company] = {f"{weak_buy}"}
+        elif df['uptrend'][index] == False:
+            if df['k'][index] > 75 or df['d'][index] > 75:
+                signals[company] = {f"{strong_sell}"}
+            elif df['k'][index] > 25 and df['k'][index] < 75:
+                signals[company] = {f"{weak_sell}"}
 
 
 for key in signals:
